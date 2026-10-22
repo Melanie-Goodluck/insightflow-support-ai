@@ -84,14 +84,22 @@ python -m uvicorn web_app:app
 
 Then open `http://127.0.0.1:8000` in a browser. The API documentation is
 available at `http://127.0.0.1:8000/docs`, and the readiness endpoint is
-`http://127.0.0.1:8000/api/health`. Avoid development auto-reload on a
+`http://127.0.0.1:8000/api/health/ready`. The liveness endpoint is
+`http://127.0.0.1:8000/api/health/live`. Avoid development auto-reload on a
 memory-constrained computer because it can start an additional Python process.
+
+Every HTTP response includes an `X-Request-ID` header. The server writes one
+structured JSON log per request containing that ID, the method, path, response
+status, and duration. Questions and request bodies are deliberately excluded
+from logs to protect user privacy. Request IDs make it possible to connect a
+reported failure to its server log without collecting the user's question.
 
 ### Run with Docker
 
 The production container runs as a non-root user, keeps dependency installation
 in a cached build layer, exposes a configurable `PORT`, uses one worker to avoid
-duplicating the local models in memory, and checks `/api/health` at runtime.
+duplicating the local models in memory, and checks `/api/health/ready` at
+runtime.
 
 Build and run it with:
 

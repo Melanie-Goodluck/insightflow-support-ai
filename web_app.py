@@ -1,8 +1,12 @@
 """FastAPI web application for the InsightFlow support assistant."""
 
 from contextlib import asynccontextmanager
+import json
+import logging
 from pathlib import Path
+from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 from src.generator import GroundedAnswerGenerator, load_generation_pipeline
 from src.rag_service import RAGService
@@ -13,6 +17,9 @@ from src.semantic_retriever import SemanticRetriever, load_embedding_model
 PROJECT_DIRECTORY = Path(__file__).parent
 DOCUMENTS_DIRECTORY = PROJECT_DIRECTORY / "data" / "product_docs"
 STATIC_DIRECTORY = PROJECT_DIRECTORY / "static"
+REQUEST_ID_HEADER = "X-Request-ID"
+request_logger = logging.getLogger("insightflow.requests")
+request_logger.setLevel(logging.INFO)
 
 
 def build_service() -> RAGService:
@@ -49,7 +56,7 @@ def create_app(service: RAGService | None = None) -> Any:
 
     app = FastAPI(
         title="InsightFlow Support AI",
-        version="6.0.0",
+        version="7.0.0",
         description="A locally run, evaluated RAG support assistant.",
         lifespan=lifespan,
     )
@@ -68,16 +75,56 @@ def create_app(service: RAGService | None = None) -> Any:
 
     app.mount("/static", StaticFiles(directory=STATIC_DIRECTORY), name="static")
 
+    @app.middleware("http")
+    async def log_request(request: Request, call_next):
+        """Trace each request without storing questions or other user content."""
+
+        request_id = str(uuid4())
+        started_at = perf_counter()
+        status_code = 500
+
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers[REQUEST_ID_HEADER] = request_id
+            return response
+        finally:
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            request_logger.info(
+                json.dumps(
+                    {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": status_code,
+                        "duration_ms": duration_ms,
+                    },
+                    separators=(",", ":"),
+                )
+            )
+
     @app.get("/", include_in_schema=False)
     async def home():
         return FileResponse(STATIC_DIRECTORY / "index.html")
 
-    @app.get("/api/health")
-    async def health(request: Request):
+    @app.get("/api/health/live")
+    async def liveness():
+        return {"status": "alive"}
+
+    @app.get("/api/health/ready")
+    async def readiness(request: Request):
+        service_loaded = hasattr(request.app.state, "rag_service")
         return {
-            "status": "ready",
-            "service_loaded": hasattr(request.app.state, "rag_service"),
+            "status": "ready" if service_loaded else "not_ready",
+            "service_loaded": service_loaded,
         }
+
+    @app.get("/api/health", include_in_schema=False)
+    async def health(request: Request):
+        """Keep the original health URL working for existing users."""
+
+        return await readiness(request)
 
     @app.post("/api/ask", response_model=AskResponse)
     async def ask(payload: AskRequest, request: Request):
