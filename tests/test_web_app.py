@@ -42,6 +42,12 @@ class WebAppTests(unittest.TestCase):
             response.json()["answer"], "Received: How do I connect PostgreSQL?"
         )
 
+    def test_request_logger_has_its_own_output_handler(self):
+        from web_app import request_logger
+
+        self.assertTrue(request_logger.handlers)
+        self.assertFalse(request_logger.propagate)
+
     def test_request_has_id_and_privacy_safe_structured_log(self):
         from fastapi.testclient import TestClient
 

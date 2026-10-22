@@ -20,6 +20,11 @@ STATIC_DIRECTORY = PROJECT_DIRECTORY / "static"
 REQUEST_ID_HEADER = "X-Request-ID"
 request_logger = logging.getLogger("insightflow.requests")
 request_logger.setLevel(logging.INFO)
+if not request_logger.handlers:
+    log_handler = logging.StreamHandler()
+    log_handler.setFormatter(logging.Formatter("%(message)s"))
+    request_logger.addHandler(log_handler)
+request_logger.propagate = False
 
 
 def build_service() -> RAGService:
