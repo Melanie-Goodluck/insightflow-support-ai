@@ -1,5 +1,7 @@
 # InsightFlow Support AI
 
+[![Continuous integration](https://github.com/Melanie-Goodluck/insightflow-support-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Melanie-Goodluck/insightflow-support-ai/actions/workflows/ci.yml)
+
 InsightFlow Support AI is a beginner-friendly technical-support RAG project.
 It searches fictional product documentation and retrieves the passages most
 relevant to a user's question. Later milestones will add embeddings, an LLM,
