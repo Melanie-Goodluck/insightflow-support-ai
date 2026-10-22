@@ -85,6 +85,22 @@ available at `http://127.0.0.1:8000/docs`, and the readiness endpoint is
 `http://127.0.0.1:8000/api/health`. Avoid development auto-reload on a
 memory-constrained computer because it can start an additional Python process.
 
+### Run with Docker
+
+The production container runs as a non-root user, keeps dependency installation
+in a cached build layer, exposes a configurable `PORT`, uses one worker to avoid
+duplicating the local models in memory, and checks `/api/health` at runtime.
+
+Build and run it with:
+
+```bash
+docker build -t insightflow-support-ai .
+docker run --rm -p 8000:8000 insightflow-support-ai
+```
+
+The first container start downloads the two open-source models. Allow several
+minutes for that initial startup before opening `http://127.0.0.1:8000`.
+
 Run the complete RAG evaluation with:
 
 ```bash
@@ -172,6 +188,8 @@ insightflow-support-ai/
 ├── src/                     retrieval code
 ├── static/                  browser interface
 ├── tests/                   automated checks
+├── Dockerfile               production container definition
+├── .dockerignore            container build exclusions
 ├── app.py                   command-line entry point
 ├── web_app.py               FastAPI entry point
 └── README.md                project explanation
