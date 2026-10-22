@@ -1,0 +1,28 @@
+[
+  {"question": "Which file types can I upload?", "expected_heading": "Supported formats", "style": "direct"},
+  {"question": "Can the platform accept an Excel spreadsheet?", "expected_heading": "Supported formats", "style": "paraphrase"},
+  {"question": "What is the maximum upload size?", "expected_heading": "File size and structure", "style": "direct"},
+  {"question": "Are blank or repeated column names allowed in my dataset?", "expected_heading": "File size and structure", "style": "paraphrase"},
+  {"question": "What does error E104 mean?", "expected_heading": "Troubleshooting rejected uploads", "style": "direct"},
+  {"question": "My spreadsheet will not import", "expected_heading": "Troubleshooting rejected uploads", "style": "paraphrase"},
+
+  {"question": "How do I connect PostgreSQL?", "expected_heading": "PostgreSQL setup", "style": "direct"},
+  {"question": "Where do I enter the details for my Postgres data server?", "expected_heading": "PostgreSQL setup", "style": "paraphrase"},
+  {"question": "What does database error E221 mean?", "expected_heading": "Connection problems", "style": "direct"},
+  {"question": "The system cannot reach my data server", "expected_heading": "Connection problems", "style": "paraphrase"},
+
+  {"question": "How often can a dashboard refresh?", "expected_heading": "Refresh behaviour", "style": "direct"},
+  {"question": "When will a report connected to a database update?", "expected_heading": "Refresh behaviour", "style": "paraphrase"},
+  {"question": "Why is my dashboard showing old data?", "expected_heading": "Stale dashboard data", "style": "direct"},
+  {"question": "My report contains outdated information", "expected_heading": "Stale dashboard data", "style": "paraphrase"},
+  {"question": "Who can select Refresh Now?", "expected_heading": "Manual refresh", "style": "direct"},
+  {"question": "Can a viewer force a report to update immediately?", "expected_heading": "Manual refresh", "style": "paraphrase"},
+
+  {"question": "How do I invite a team member?", "expected_heading": "Inviting team members", "style": "direct"},
+  {"question": "How can I give a colleague access?", "expected_heading": "Inviting team members", "style": "paraphrase"},
+  {"question": "What can an Editor do?", "expected_heading": "Roles", "style": "direct"},
+  {"question": "Which permission level can manage billing and users?", "expected_heading": "Roles", "style": "paraphrase"},
+  {"question": "How long is an account locked after failed sign-ins?", "expected_heading": "Sign-in problems", "style": "direct"},
+  {"question": "I cannot get into my account after several failed attempts", "expected_heading": "Sign-in problems", "style": "paraphrase"}
+]
+

@@ -1,0 +1,12 @@
+@"
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+evaluation_results.csv
+rag_evaluation_results.csv
+"@ | Set-Content .gitignore
