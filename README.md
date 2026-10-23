@@ -94,6 +94,15 @@ status, and duration. Questions and request bodies are deliberately excluded
 from logs to protect user privacy. Request IDs make it possible to connect a
 reported failure to its server log without collecting the user's question.
 
+Model inference runs in a worker thread so that health endpoints remain
+responsive while an answer is being generated. A semaphore limits concurrent
+generation to protect CPU and memory. By default, one question is processed at
+a time and another request waits for up to one second before receiving HTTP
+`503 Service Unavailable` with a `Retry-After` header. Production operators can
+change these limits with `MAX_CONCURRENT_INFERENCE` and
+`INFERENCE_QUEUE_TIMEOUT_SECONDS`; increasing concurrency also increases CPU
+and memory pressure.
+
 ### Run with Docker
 
 The production container runs as a non-root user, keeps dependency installation

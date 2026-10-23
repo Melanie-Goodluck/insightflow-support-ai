@@ -1,8 +1,10 @@
 """FastAPI web application for the InsightFlow support assistant."""
 
+import asyncio
 from contextlib import asynccontextmanager
 import json
 import logging
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -38,8 +40,21 @@ def build_service() -> RAGService:
     return RAGService(retriever, generator)
 
 
-def create_app(service: RAGService | None = None) -> Any:
+def create_app(
+    service: RAGService | None = None,
+    max_concurrent_inference: int | None = None,
+    queue_timeout_seconds: float | None = None,
+) -> Any:
     """Create the API; an injected service keeps endpoint tests lightweight."""
+
+    if max_concurrent_inference is None:
+        max_concurrent_inference = int(os.getenv("MAX_CONCURRENT_INFERENCE", "1"))
+    if queue_timeout_seconds is None:
+        queue_timeout_seconds = float(os.getenv("INFERENCE_QUEUE_TIMEOUT_SECONDS", "1"))
+    if max_concurrent_inference < 1:
+        raise ValueError("MAX_CONCURRENT_INFERENCE must be at least 1")
+    if queue_timeout_seconds <= 0:
+        raise ValueError("INFERENCE_QUEUE_TIMEOUT_SECONDS must be greater than 0")
 
     try:
         from fastapi import FastAPI, HTTPException, Request
@@ -53,6 +68,7 @@ def create_app(service: RAGService | None = None) -> Any:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.inference_semaphore = asyncio.Semaphore(max_concurrent_inference)
         if service is None:
             app.state.rag_service = build_service()
         else:
@@ -137,7 +153,25 @@ def create_app(service: RAGService | None = None) -> Any:
         if not question:
             raise HTTPException(status_code=422, detail="Question must not be empty")
 
-        response = request.app.state.rag_service.ask(question)
+        inference_semaphore = request.app.state.inference_semaphore
+        try:
+            await asyncio.wait_for(
+                inference_semaphore.acquire(), timeout=queue_timeout_seconds
+            )
+        except TimeoutError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="The AI service is busy. Please try again shortly.",
+                headers={"Retry-After": "1"},
+            ) from error
+
+        try:
+            response = await asyncio.to_thread(
+                request.app.state.rag_service.ask, question
+            )
+        finally:
+            inference_semaphore.release()
+
         return AskResponse(
             answer=response.answer,
             sources=response.sources,
