@@ -2,222 +2,275 @@
 
 [![Continuous integration](https://github.com/Melanie-Goodluck/insightflow-support-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Melanie-Goodluck/insightflow-support-ai/actions/workflows/ci.yml)
 
-InsightFlow Support AI is a beginner-friendly technical-support RAG project.
-It searches fictional product documentation and retrieves the passages most
-relevant to a user's question. Later milestones will add embeddings, an LLM,
-citations, evaluation, an agent, a web interface, and deployment.
+InsightFlow Support AI is an evaluated retrieval-augmented generation (RAG)
+assistant for technical product support. It searches a fictional product
+knowledge base, generates an evidence-grounded answer with local open-source
+models, cites the retrieved sources, and refuses questions that the
+documentation cannot support.
 
-## Milestones 1-6: evaluated RAG and a local web application
+The project goes beyond a basic RAG demo: it compares retrieval strategies,
+records automatic and human evaluation results, tests failure cases, exposes a
+FastAPI service and responsive web interface, and includes production-oriented
+controls for logging, health monitoring, concurrency and containerisation.
 
-Milestone 1 uses a small keyword-based similarity algorithm written with
-Python's standard library. Milestone 2 adds a free local sentence-embedding
-model so that questions and documents can also be compared by meaning.
-Milestone 3 evaluates both retrievers on the same 22 labelled questions using
-Top-1 accuracy, Top-3 accuracy, and Mean Reciprocal Rank.
-Milestone 4 adds a local FLAN-T5 answer-generation model. The application gives
-the model the three semantically retrieved chunks, instructs it to use only
-that evidence, and displays the sources separately from the model output.
-Milestone 5 evaluates the complete pipeline on 12 answerable and 6
-unanswerable questions. It measures answer/refusal routing, expected-source
-retrieval, and response latency, then creates a CSV for human review of
-correctness, faithfulness, and helpfulness.
-Milestone 6 adds a reusable application service, a FastAPI backend, and a
-responsive browser interface. The local models are loaded once when the server
-starts and reused for every question.
+The complete application runs locally on CPU and makes no paid AI API calls.
 
-The program:
+## Highlights
 
-1. reads the Markdown documents in `data/product_docs`;
-2. splits each document into sections called chunks;
-3. turns the question and chunks into weighted word representations;
-4. compares the question with every chunk;
-5. prints the three most relevant chunks and their source files.
+- Semantic retrieval with `sentence-transformers/all-MiniLM-L6-v2`
+- Local answer generation with `google/flan-t5-base`
+- Brand-neutral query transformation that fixed an observed retrieval miss
+- Grounding and relevance checks with safe refusal behaviour
+- Answer citations and visible retrieved evidence
+- Labelled retrieval and end-to-end RAG evaluation datasets
+- FastAPI backend and responsive browser interface
+- Privacy-conscious structured logs with request IDs and latency
+- Liveness and readiness health endpoints
+- CPU and memory protection for simultaneous inference requests
+- Non-root Docker image and automated GitHub Actions checks
+- 37 automated tests covering retrieval, generation, evaluation and API behaviour
 
-## Run it
+## Results
 
-Python 3.10 or newer is recommended. Create and activate a virtual environment,
-then install the semantic-search dependency:
+### Retrieval benchmark
+
+The retrievers were evaluated on the same 22 labelled questions.
+
+| Retriever | Top-1 accuracy | Top-3 accuracy | Mean Reciprocal Rank |
+| --- | ---: | ---: | ---: |
+| Keyword baseline | 54.5% | 77.3% | 0.636 |
+| Semantic retrieval | 86.4% | 100.0% | 0.924 |
+| Brand-neutral semantic retrieval | **86.4%** | **100.0%** | **0.924** |
+| Hybrid experiment | 72.7% | 86.4% | 0.795 |
+
+The hybrid experiment corrected one difficult team-invitation query but reduced
+overall benchmark performance, so it was rejected. A narrower transformation
+that removes the repeated product name only from the embedding query corrected
+that failure while retaining the semantic retriever's stronger overall scores.
+
+### End-to-end RAG benchmark
+
+The complete pipeline was evaluated on 12 answerable and 6 unanswerable
+questions.
+
+| Automatic metric | Result |
+| --- | ---: |
+| Answer/refusal routing accuracy | **100.0%** |
+| Answerable-question answer rate | **100.0%** |
+| Unanswerable-question refusal accuracy | **100.0%** |
+| False-refusal rate | **0.0%** |
+| Unsupported-answer rate | **0.0%** |
+| Expected-source retrieval | **100.0%** |
+| Mean response time on the evaluation computer | 1.58 s |
+| Median response time on the evaluation computer | 1.39 s |
+
+Human review produced 91.7% overall correctness, 100% faithfulness and 83.3%
+overall helpfulness. On answerable questions alone, correctness was 87.5% and
+helpfulness was 75.0%. These results describe a small controlled dataset, not
+general performance on every support domain.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A["Browser or CLI question"] --> B["FastAPI / RAG service"]
+    B --> C["Brand-neutral embedding query"]
+    C --> D["MiniLM semantic retrieval"]
+    D --> E["Top three documentation chunks"]
+    E --> F["FLAN-T5 answer generation"]
+    F --> G["Relevance and grounding safeguards"]
+    G --> H["Grounded answer with sources"]
+    G --> I["Safe refusal"]
+```
+
+The original user question is preserved for generation. Only the semantic
+search query is made brand-neutral. This prevents a repeated product name from
+dominating the embedding while keeping the user's meaning intact.
+
+## Safety and failure handling
+
+The assistant does not return every model output automatically.
+
+- A similarity threshold rejects questions with weak retrieved evidence.
+- A grounding-coverage check rejects answers unsupported by the retrieved text.
+- A guarded fallback replaces vague heading-only output with documentation text
+  only when retrieval is sufficiently strong.
+- Compact factual answers, such as supported formats or time limits, are kept.
+- Unsupported questions receive a clear handoff to human support.
+- Diagnostic fields retain the raw output, decision reason, scores and evidence
+  for error analysis.
+
+## Production engineering
+
+- Models and documentation load once at application startup.
+- `/api/health/live` confirms that the web process is alive.
+- `/api/health/ready` confirms that the RAG service has loaded.
+- Each response includes an `X-Request-ID` header.
+- Structured JSON logs record request ID, method, path, status and duration.
+- Questions and request bodies are excluded from logs to protect privacy.
+- Model work runs outside the main async request loop, keeping health checks
+  responsive during generation.
+- A semaphore processes one inference request at a time by default. Excess
+  requests briefly wait and then receive `503 Service Unavailable` with a
+  `Retry-After` header.
+- Docker runs the service as a non-root user with one worker, preventing local
+  models from being duplicated in memory.
+- GitHub Actions runs Python tests, JavaScript syntax validation and a production
+  Docker build on every push and pull request.
+
+The concurrency settings can be changed with `MAX_CONCURRENT_INFERENCE` and
+`INFERENCE_QUEUE_TIMEOUT_SECONDS`. Increasing concurrency also increases CPU
+and memory pressure.
+
+## Technology
+
+- Python
+- FastAPI and Uvicorn
+- Sentence Transformers
+- Hugging Face Transformers
+- FLAN-T5
+- HTML, CSS and JavaScript
+- Docker
+- GitHub Actions
+- Python `unittest`
+
+## Run locally
+
+Python 3.10 or newer is recommended. The first run downloads the embedding and
+generation models from Hugging Face; later runs reuse the local model cache.
+
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
 
-On Windows PowerShell:
+Activate it on Windows PowerShell and install the dependencies:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-The original lexical application still runs with:
-
-```bash
-python app.py
-```
-
-Compare lexical and semantic retrieval with:
-
-```bash
-python compare_retrievers.py
-```
-
-Run the formal evaluation with:
-
-```bash
-python evaluate_retrievers.py
-```
-
-The command prints aggregate metrics and creates `evaluation_results.csv` for
-question-level error analysis.
-
-Run the complete local RAG assistant with:
-
-```bash
-python rag_app.py
-```
-
-Run the browser application with:
+Start the web application:
 
 ```powershell
 python -m uvicorn web_app:app
 ```
 
-Then open `http://127.0.0.1:8000` in a browser. The API documentation is
-available at `http://127.0.0.1:8000/docs`, and the readiness endpoint is
-`http://127.0.0.1:8000/api/health/ready`. The liveness endpoint is
-`http://127.0.0.1:8000/api/health/live`. Avoid development auto-reload on a
-memory-constrained computer because it can start an additional Python process.
+Open `http://127.0.0.1:8000` in a browser. Interactive API documentation is
+available at `http://127.0.0.1:8000/docs`.
 
-Every HTTP response includes an `X-Request-ID` header. The server writes one
-structured JSON log per request containing that ID, the method, path, response
-status, and duration. Questions and request bodies are deliberately excluded
-from logs to protect user privacy. Request IDs make it possible to connect a
-reported failure to its server log without collecting the user's question.
+Avoid development auto-reload on a memory-constrained computer because it can
+start an additional process and load another copy of the models.
 
-Model inference runs in a worker thread so that health endpoints remain
-responsive while an answer is being generated. A semaphore limits concurrent
-generation to protect CPU and memory. By default, one question is processed at
-a time and another request waits for up to one second before receiving HTTP
-`503 Service Unavailable` with a `Retry-After` header. Production operators can
-change these limits with `MAX_CONCURRENT_INFERENCE` and
-`INFERENCE_QUEUE_TIMEOUT_SECONDS`; increasing concurrency also increases CPU
-and memory pressure.
+### Other entry points
 
-### Run with Docker
+Run the terminal RAG assistant:
 
-The production container runs as a non-root user, keeps dependency installation
-in a cached build layer, exposes a configurable `PORT`, uses one worker to avoid
-duplicating the local models in memory, and checks `/api/health/ready` at
-runtime.
+```bash
+python rag_app.py
+```
 
-Build and run it with:
+Run the original keyword retriever:
+
+```bash
+python app.py
+```
+
+Compare retrieval methods:
+
+```bash
+python compare_retrievers.py
+```
+
+## Evaluation and diagnosis
+
+Evaluate all retrieval methods:
+
+```bash
+python evaluate_retrievers.py
+```
+
+Evaluate the complete RAG pipeline:
+
+```bash
+python evaluate_rag.py
+```
+
+Inspect one question in detail:
+
+```bash
+python diagnose_rag.py "How can I invite a colleague to InsightFlow?"
+```
+
+The diagnostic command displays semantic, brand-neutral and hybrid candidate
+evidence, similarity scores, raw model output, grounding coverage, decision
+reason and final response. Evaluation CSV files are generated locally for
+question-level analysis and human scoring.
+
+## Automated tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The 37-test suite covers retrieval, semantic query transformation, generation
+safeguards, evaluation calculations, API validation, structured logging,
+health endpoints and simultaneous-request protection.
+
+## Run with Docker
 
 ```bash
 docker build -t insightflow-support-ai .
 docker run --rm -p 8000:8000 insightflow-support-ai
 ```
 
-The first container start downloads the two open-source models. Allow several
-minutes for that initial startup before opening `http://127.0.0.1:8000`.
-
-Run the complete RAG evaluation with:
-
-```bash
-python evaluate_rag.py
-```
-
-Diagnose one question without rerunning the full dataset with:
-
-```bash
-python diagnose_rag.py "How can I invite a colleague to InsightFlow?"
-```
-
-The diagnostic command displays the three candidate sections and similarity
-scores for the original semantic retriever, a brand-neutral semantic
-candidate, and the hybrid experiment. It also shows the raw model output,
-grounding coverage, the precise decision reason, and the final answer.
-Refusal reasons distinguish low similarity, empty model output, and low
-grounding coverage. Candidate evidence is retained even when the final answer
-is refused.
-
-The hybrid experiment combines semantic and lexical rankings using reciprocal
-rank fusion. It fixed the team-invitation miss, but its 22-question benchmark
-was worse than semantic retrieval (72.7% versus 86.4% Top-1 accuracy), so it
-was rejected as the main retriever.
-
-The narrower brand-neutral semantic method removes the repeated product name
-`InsightFlow` only from the question used to create the query embedding. The
-user's original question is preserved for answer generation. It fixed the
-observed invitation-query failure while retaining the original semantic
-retriever's full benchmark: 86.4% Top-1 accuracy, 100% Top-3 accuracy, and
-0.924 Mean Reciprocal Rank. It is therefore used by the normal RAG application
-and complete RAG evaluation.
-
-The evaluation creates `rag_evaluation_results.csv`. Automatic metrics report
-whether the system answered answerable questions and refused unanswerable
-questions. It also records raw model output, refusal reason, grounding score,
-answer sources, and candidate evidence. The CSV deliberately leaves three human-review columns blank. Score
-correctness, faithfulness, and helpfulness from 0 to 2 after inspecting each
-answer against its reference answer and retrieved evidence.
-
-The first run downloads `google/flan-t5-base`. It runs locally on the CPU and
-does not make paid generation API calls. A provisional similarity threshold
-refuses questions when the best retrieved chunk scores below `0.20`; this
-threshold must be evaluated in the next milestone.
-
-FLAN-T5 is loaded explicitly with `AutoTokenizer` and
-`AutoModelForSeq2SeqLM`, then generates answers through `model.generate()`.
-This avoids relying on version-specific pipeline task aliases and makes the
-tokenisation and generation stages explicit.
-
-Two post-generation safeguards handle observed failures. A grounding-coverage
-check refuses answers whose meaningful words are poorly supported by retrieved
-evidence. A low-information fallback replaces a heading-only or vague short
-label with the highest-ranked documentation passage, and only when its
-retrieval score is at least `0.35`. Compact factual answers such as comma-separated
-format lists and numeric durations remain unchanged. Weaker low-information
-matches are refused so that an irrelevant model output cannot trigger an
-unrelated full-passage answer. The terminal labels the
-top-three chunks as `Retrieved evidence`, since not every candidate necessarily
-supports the final answer. These lightweight safeguards are baselines and
-require evaluation on answerable and unanswerable questions.
-
-The first semantic run downloads the open-source embedding model and stores it
-in the computer's model cache. Later runs reuse the local copy. This project
-does not make a paid AI API call.
-
-Try questions such as:
-
-- Why was my CSV file rejected?
-- How do I connect a PostgreSQL database?
-- Why is my dashboard showing old data?
-- What does error E104 mean?
-
-Run the automated checks with:
-
-```bash
-python -m unittest discover -s tests -v
-```
+The first container start downloads both models. The health check allows up to
+five minutes for this initial startup. The image uses a configurable `PORT` and
+one Uvicorn worker.
 
 ## Project structure
 
 ```text
 insightflow-support-ai/
+├── .github/workflows/       continuous integration
 ├── data/product_docs/       fictional product knowledge base
-├── src/                     retrieval code
-├── static/                  browser interface
-├── tests/                   automated checks
+├── data/*.json              labelled evaluation questions
+├── src/                     retrieval, generation and evaluation modules
+├── static/                  responsive browser interface
+├── tests/                   automated regression tests
 ├── Dockerfile               production container definition
-├── .dockerignore            container build exclusions
-├── app.py                   command-line entry point
-├── web_app.py               FastAPI entry point
-└── README.md                project explanation
+├── app.py                   keyword-search CLI
+├── rag_app.py               complete RAG CLI
+├── web_app.py               FastAPI application
+├── evaluate_retrievers.py   retrieval benchmark runner
+├── evaluate_rag.py          end-to-end benchmark runner
+└── diagnose_rag.py          single-question diagnostic tool
 ```
 
-## Current limitation
+## Example questions
 
-The current model is intentionally small enough for a 16 GB CPU-based Windows
-laptop. The labelled dataset is small and based on fictional documentation, so
-its results describe this controlled prototype rather than every real support
-knowledge base. Human quality scoring is subjective and should be reported
-alongside the scoring rubric and reviewer.
+- Which file formats can I upload to InsightFlow?
+- How do I connect a PostgreSQL database?
+- Why is my dashboard showing old data?
+- How can I invite a colleague to InsightFlow?
+- What does error E104 mean?
+
+An intentionally unsupported question, such as asking how to permanently delete
+an account, demonstrates the refusal path.
+
+## Limitations and next steps
+
+- The knowledge base and labelled datasets are deliberately small and fictional.
+- The CPU-friendly generator can produce less polished answers than a larger
+  hosted model.
+- Thresholds were calibrated on a controlled evaluation set and need broader
+  validation before use with real customers.
+- Human review was performed by one reviewer and is therefore subjective.
+- A real deployment would also require authentication, organisation-specific
+  access control, rate limiting, external monitoring and a larger evaluation
+  dataset.
+- A public live demo is not currently hosted because suitable always-on model
+  memory requires paid compute. The repository remains fully reproducible
+  locally and through its tested Docker build.
