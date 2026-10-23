@@ -19,6 +19,13 @@ The complete application runs locally on CPU and makes no paid AI API calls.
 
 ![InsightFlow Support AI answering a documentation question with grounded sources](docs/insightflow-support-ai-demo.png)
 
+### Video demonstration
+
+
+https://github.com/user-attachments/assets/41f4b20b-625c-4a7f-938f-d2941a9db50a
+
+
+
 ## Highlights
 
 - Semantic retrieval with `sentence-transformers/all-MiniLM-L6-v2`
