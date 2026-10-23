@@ -15,6 +15,10 @@ controls for logging, health monitoring, concurrency and containerisation.
 
 The complete application runs locally on CPU and makes no paid AI API calls.
 
+## Application preview
+
+![InsightFlow Support AI answering a documentation question with grounded sources](docs/insightflow-support-ai-demo.png)
+
 ## Highlights
 
 - Semantic retrieval with `sentence-transformers/all-MiniLM-L6-v2`
